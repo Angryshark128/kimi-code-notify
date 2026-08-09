@@ -1,6 +1,6 @@
 #!/bin/bash
 # kimi-code-notify 安装脚本
-# 将「任务结果通知」hooks 写入 ~/.kimi-code/config.toml（幂等，可重复执行）
+# 将「任务结果通知」hooks（后台任务 5 条 + 对话回合 3 条）写入 ~/.kimi-code/config.toml（幂等，可重复执行）
 # 用法:
 #   ./install.sh       安装 / 更新
 #   ./install.sh -u    卸载（移除本脚本管理的 hooks 块）
@@ -44,7 +44,8 @@ remove_block
 # 生成 hooks 块；quoted heredoc 保留 \\. 转义，@SCRIPT@ 写入前替换为脚本绝对路径
 HOOKS="$(cat <<'EOF'
 # kimi-code-notify hooks: begin
-# 后台任务结果 → 系统通知 + 提示音（由 install.sh 生成，请勿手改；卸载执行 ./install.sh -u）
+# 任务结果 → 系统通知 + 提示音 + 状态图标（由 install.sh 生成，请勿手改；卸载执行 ./install.sh -u）
+# 后台任务终态（Notification 事件）
 [[hooks]]
 event = "Notification"
 matcher = "task\\.completed"
@@ -69,11 +70,25 @@ command = "@SCRIPT@ 任务被终止 Basso"
 event = "Notification"
 matcher = "task\\.lost"
 command = "@SCRIPT@ 任务丢失 Ping"
+
+# 对话回合终态（Stop / StopFailure / Interrupt 事件）
+[[hooks]]
+event = "Stop"
+command = "@SCRIPT@ 对话完成 Glass"
+
+[[hooks]]
+event = "StopFailure"
+matcher = "*"
+command = "@SCRIPT@ 对话失败 Basso"
+
+[[hooks]]
+event = "Interrupt"
+command = "@SCRIPT@ 对话已中断 Ping"
 # kimi-code-notify hooks: end
 EOF
 )"
 HOOKS="${HOOKS//@SCRIPT@/$NOTIFY_SCRIPT}"
 
 printf '\n%s\n' "$HOOKS" >> "$CONFIG"
-echo "已写入 ${CONFIG}（共 5 条 hooks，新会话生效）"
+echo "已写入 ${CONFIG}（共 8 条 hooks，新会话 / /reload 生效）"
 echo "提示：tui.toml 的桌面通知改动在会话内执行 /reload-tui 即可生效"
