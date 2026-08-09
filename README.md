@@ -1,6 +1,6 @@
 # kimi-code-notify
 
-Kimi Code 任务结束时弹系统通知 + 提示音，覆盖**后台任务**与**对话回合**，用**彩色状态图标**区分成功 / 失败 / 中断 / 超时。macOS 原生实现，`terminal-notifier` 优先（支持自定义图标），无则自动降级 `osascript`。
+Kimi Code 任务结束时弹系统通知 + 提示音，覆盖**后台任务**与**对话回合**，用**状态 emoji**（✅ / ⏰ / ❌ 等）区分成功 / 失败 / 中断 / 超时。macOS 原生实现，主路径 `osascript`（系统自带，无额外依赖）。
 
 > 触发时机：
 > - **后台任务**（`Bash` / `Agent` 的 `run_in_background=true`）到达终态时（`Notification` 事件）
@@ -8,24 +8,20 @@ Kimi Code 任务结束时弹系统通知 + 提示音，覆盖**后台任务**与
 
 ## 特性
 
-- ✅ 成功 = 绿色对勾，失败/中断/被终止/丢失 = 红色叉，超时 = 橙色时钟（`terminal-notifier -contentImage`）
+- ✅ 横幅消息带**状态 emoji**：✅ 完成 / ❌ 失败 / ⏰ 超时 / ⛔ 被终止 / ❓ 丢失 / ✋ 中断
 - ✅ 通知**标题显示当前会话名**（hook 调用时从 stdin JSON 自动提取 `session_title`）
 - ✅ 不同状态用**不同提示音**区分（Glass / Sosumi / Funk / Basso / Ping）
-- ✅ **Bark（iOS 推送）可选接入**：任务结束同步推送 iPhone，配一次后无感生效
-- ✅ **Bark 标题带状态 emoji**：✅ 完成 / ❌ 失败 / ⏰ 超时 / ⛔ 被终止 / ❓ 丢失 / ✋ 中断（系统通知保持纯会话名标题，状态由本地彩色图标+音效区分）
-- ✅ 无 `terminal-notifier` 时自动降级 `osascript`（无彩色图标）；均不可用时只播声音 / 纯文本
+- ✅ **Bark（iOS 推送）可选接入**：任务结束同步推送 iPhone，配一次后无感生效，标题同样带状态 emoji + 来源设备标识
+- ✅ 系统通知用 macOS 自带 `osascript`，无额外依赖；不可用时只播声音 / 纯文本
 - ✅ 幂等安装 / 一键卸载，自动备份 `config.toml`
 
 ## 依赖
 
 | 工具 | 用途 | 缺失时 |
 |---|---|---|
-| `terminal-notifier`（推荐） | 弹横幅 + **彩色状态图标** | 降级 osascript，无图标 |
-| `osascript`（macOS 自带） | 降级路径：弹横幅 + 声音 | 再降级为 afplay / 文本 |
+| `osascript`（macOS 自带） | 弹横幅 + 声音（主路径） | 降级为 afplay / 文本 |
 
-```bash
-brew install terminal-notifier   # 可选但推荐
-```
+> 注：曾使用 `terminal-notifier` 提供彩色状态图标，但在新版 macOS 上通知会被系统丢弃（日志 `app not found`）且进程挂起不退出，已弃用。状态改用 emoji 区分。
 
 ## 快速开始
 
@@ -35,7 +31,7 @@ cd ~/Project/kimi-code-notify
 ./install.sh        # 写入 8 条 hooks 到 ~/.kimi-code/config.toml（自动备份）
 ```
 
-然后**重启 kimi code 会话**或执行 `/reload`（hooks 在会话启动/重载时读取），之后任务结束就会有通知+声音+图标。
+然后**重启 kimi code 会话**或执行 `/reload`（hooks 在会话启动/重载时读取），之后任务结束就会有通知+声音。
 
 ### 先手动试一次
 
@@ -86,17 +82,20 @@ cd ~/Project/kimi-code-notify
 Kimi Code 的 [Hooks 机制](https://www.kimi.com/code/docs/en/kimi-code-cli/customization/hooks.html)：
 
 - `install.sh` 在 `~/.kimi-code/config.toml` 追加 `[[hooks]]` 规则，共 8 条，监听 `Notification`（后台任务）与 `Stop` / `StopFailure` / `Interrupt`（对话回合）；
-- 触发时调用 `notify.sh <消息> <音效>`，脚本按消息文本匹配状态图标，优先用 `terminal-notifier -appIcon -contentImage` 弹横幅并播放提示音，失败则降级 `osascript`；
+- 触发时调用 `notify.sh <消息> <音效>`，脚本按消息文本匹配状态 emoji，用 macOS 自带 `osascript` 弹横幅并播放提示音（`terminal-notifier` 在新版 macOS 上挂起且通知被丢弃，已弃用）；
 - **会话名标题**：hook 的输入数据（含 `session_title`）经 stdin 以 JSON 传给命令，`notify.sh` 自动提取作为通知标题；
 - 标记块 `# kimi-code-notify hooks: begin / end` 之间的内容由脚本管理，重复安装不会叠加。
 
-### 图标颜色映射
+### 状态 emoji 映射
 
-| 消息含 | 图标 | 场景 |
+| 消息含 | emoji | 场景 |
 |---|---|---|
-| `完成` / `成功` | `icons/green-check.png`（绿 ✓） | 任务完成、对话完成 |
-| `超时` | `icons/orange-clock.png`（橙 🕐） | 任务超时 |
-| 其他（失败/中断/被终止/丢失） | `icons/red-x.png`（红 ✗） | 任务失败、对话失败、中断等 |
+| `完成` / `成功` | ✅ | 任务完成、对话完成 |
+| `超时` | ⏰ | 任务超时 |
+| `失败` | ❌ | 任务失败、对话失败 |
+| `被终止` | ⛔ | 任务被终止（TaskStop 等） |
+| `丢失` | ❓ | 任务丢失（进程失联） |
+| `中断` | ✋ | 用户中断对话回合 |
 
 ## 通知类型（已验证）
 
@@ -127,7 +126,7 @@ macOS 内置音效：`Basso` `Blow` `Bottle` `Frog` `Funk` `Glass` `Hero` `Morse
 ## 定制
 
 - **改消息 / 音效**：编辑 `install.sh` 中 hooks 块的 `command = "@SCRIPT@ ..."` 行，重新运行 `./install.sh`（幂等覆盖）；
-- **换图标**：替换 `icons/` 下的 png（256×256 RGBA 即可），或改 `notify.sh` 中的 `case "$MESSAGE"` 颜色映射；
+- **改状态 emoji**：编辑 `notify.sh` 中的 `case "$MESSAGE"` 映射；
 - **其他事件**：参考官方 Hooks 文档事件表（`SessionEnd`、`SubagentStop` 等），可仿照格式自行追加，例如：
 
   ```toml
@@ -152,16 +151,15 @@ notification_condition = "always"    # "unfocused"(仅终端失焦时) | "always
 
 ```
 kimi-code-notify/
-├── notify.sh      # 通知+声音+图标脚本：notify.sh <消息> [音效] [标题]
+├── notify.sh      # 通知+声音脚本：notify.sh <消息> [音效] [标题]
 ├── install.sh     # 安装/更新/卸载 hooks（-u 卸载）
-├── icons/         # 状态图标（green-check / red-x / orange-clock）
 └── README.md
 ```
 
 ## 常见问题
 
 - **没声音 / 没弹窗**：先 `./notify.sh 测试 Glass` 手动验证 → 查通知权限、系统音量、勿扰。
-- **图标还是旧应用图标**：确认已 `brew install terminal-notifier`，并重跑 `./install.sh`；仍不行则检查通知归因权限（`系统设置 → 通知` → terminal-notifier / Script Editor）。
+- **横幅不弹但 Bark 收到**：若装了旧版 `terminal-notifier`，它在新版 macOS 上会挂起并卡死脚本（通知同时被系统丢弃）——卸载它即可，本方案只依赖系统自带 `osascript`。
 - **配置了但没反应**：hooks 是**会话启动/重载时**读取的，必须 `/reload` 或重启会话（或开新会话）；`kimi -p` 单次模式同理。
 - **通知重复**：内置桌面通知与本 hooks 各弹一次，将 `tui.toml` 的 `notifications.enabled` 设为 `false` 只留本方案即可。
 - **ssh 远程终端**：`osascript` 不可用，会降级为只播 `afplay` 声音；远程主机若无声卡则仅文本输出。
